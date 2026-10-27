@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rota 23 — Mapa de Pontos</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --accent: #38bdf8;
+    --accent-2: #22d3ee;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #38bdf8;
+    --radius: 16px;
+    --shadow: 0 20px 40px -20px rgba(0,0,0,.6);
+  }
+
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+
+  body{
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, #164e63 0%, transparent 55%),
+      var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 20px 60px;
+  }
+
+  .wrap{ max-width: 1100px; margin: 0 auto; }
+
+  header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .title-block h1{
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -.03em;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .title-block p{
+    color: var(--muted);
+    font-size: .95rem;
+    margin-top: 4px;
+  }
+
+  .badge{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid #334155;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: .85rem;
+    color: var(--accent-2);
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+
+  .badge .dot{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 0 4px rgba(34,211,238,.2);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse{
+    0%,100%{ box-shadow: 0 0 0 4px rgba(34,211,238,.2); }
+    50%{ box-shadow: 0 0 0 10px rgba(34,211,238,0); }
+  }
+
+  .grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 860px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid #334155;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .card-header{
+    padding: 16px 20px;
+    border-bottom: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--text);
+  }
+
+  .card-header .icon{
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    background: rgba(56,189,248,.12);
+    color: var(--accent);
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+
+  /* ===== Mapa ===== */
+  #map{
+    height: 480px;
+    width: 100%;
+    background: #0b1220;
+  }
+
+  @media (max-width: 860px){
+    #map{ height: 380px; }
+  }
+
+  .leaflet-container{
+    font-family: inherit;
+  }
+
+  /* Marker numerado */
+  .num-marker{
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    color: #06202e;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    width: 34px; height: 34px;
+    display: grid; place-items: center;
+    font-weight: 800;
+    font-size: .8rem;
+    border: 2px solid #0f172a;
+    box-shadow: 0 4px 12px rgba(56,189,248,.5);
+  }
+  .num-marker span{
+    transform: rotate(45deg);
+    display: block;
+  }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper{
+    background: #0f172a;
+    color: var(--text);
+    border-radius: 12px;
+    border: 1px solid #334155;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  }
+  .leaflet-popup-tip{ background: #0f172a; }
+  .leaflet-popup-content{
+    margin: 12px 16px;
+    font-size: .85rem;
+    line-height: 1.5;
+  }
+  .leaflet-popup-content b{ color: var(--accent); }
+  .leaflet-popup-content code{
+    color: var(--accent-2);
+    font-size: .78rem;
+  }
+
+  /* ===== Lista ===== */
+  .list{
+    padding: 8px;
+    max-height: 480px;
+    overflow-y: auto;
+  }
+
+  .list::-webkit-scrollbar{ width: 8px; }
+  .list::-webkit-scrollbar-track{ background: transparent; }
+  .list::-webkit-scrollbar-thumb{
+    background: #334155;
+    border-radius: 99px;
+  }
+
+  .item{
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    transition: background .2s ease, transform .2s ease;
+    cursor: pointer;
+  }
+
+  .item:hover{
+    background: rgba(56,189,248,.08);
+    transform: translateX(3px);
+  }
+
+  .item .pin{
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-weight: 800;
+    font-size: .78rem;
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    color: #06202e;
+    box-shadow: 0 4px 10px rgba(56,189,248,.35);
+  }
+
+  .item.start .pin{ background: linear-gradient(135deg, #34d399, #10b981); color: #03291c; }
+  .item.end .pin{ background: linear-gradient(135deg, #f472b6, #fb7185); color: #2a0413; }
+
+  .item .info{ display: flex; flex-direction: column; gap: 2px; }
+  .item .name{
+    font-weight: 700;
+    font-size: .9rem;
+    color: var(--text);
+  }
+  .item .coords{
+    font-size: .75rem;
+    color: var(--muted);
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+
+  .divider{
+    height: 1px;
+    background: #334155;
+    margin: 4px 14px;
+    opacity: .5;
+  }
+
+  /* ===== Rodapé / ações ===== */
+  .actions{
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .btn{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: .88rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+
+  .btn:active{ transform: scale(.97); }
+
+  .btn-primary{
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    color: #06202e;
+    box-shadow: 0 10px 24px -8px rgba(56,189,248,.6);
+  }
+  .btn-primary:hover{ box-shadow: 0 14px 30px -8px rgba(56,189,248,.8); }
+
+  .btn-ghost{
+    background: var(--panel);
+    color: var(--text);
+    border-color: #334155;
+  }
+  .btn-ghost:hover{ background: var(--panel-2); }
+
+  .hint{
+    margin-top: 16px;
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .hint code{
+    background: #1e293b;
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: var(--accent-2);
+    font-size: .78rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>Rota 23</h1>
+      <p>Sequência de pontos geográficos e traçado da rota</p>
+    </div>
+    <div class="badge">
+      <span class="dot"></span>
+      <span id="countBadge">11 pontos</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- Mapa -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">🗺️</span>
+        Mapa da Rota
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <!-- Lista -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">📍</span>
+        Pontos na Ordem
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+
+  </div>
+
+  <div class="actions">
+    <a class="btn btn-primary" id="gmapsLink" target="_blank" rel="noopener">
+      ▶ Abrir no Google Maps
+    </a>
+    <button class="btn btn-ghost" id="copyBtn">📋 Copiar coordenadas</button>
+    <button class="btn btn-ghost" id="fitBtn">🎯 Ajustar zoom</button>
+  </div>
+
+  <p class="hint">
+    A rota exata segue as coordenadas em sequência. No Google Maps, use a opção de
+    <code>rotas com paradas</code> (máx. 9 paradas por link) ou abra o link gerado
+    com os pontos em ordem.
+  </p>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  /* =========================================================
+     DADOS DA ROTA 23 (na ordem informada)
+     ========================================================= */
+  const pontos = [
+    { lat: -7.245034, lng: -39.322310 },
+    { lat: -7.262003, lng: -39.322363 },
+    { lat: -7.263689, lng: -39.335642 },
+    { lat: -7.246630, lng: -39.338094 },
+    { lat: -7.246169, lng: -39.335815 },
+    { lat: -7.226843, lng: -39.338544 },
+    { lat: -7.226442, lng: -39.326453 },
+    { lat: -7.225128, lng: -39.326407 },
+    { lat: -7.222467, lng: -39.325736 },
+    { lat: -7.222423, lng: -39.325478 },
+    { lat: -7.223198, lng: -39.320853 }
+  ];
+
+  const TOTAL = pontos.length;
+
+  /* =========================================================
+     MAPA — Leaflet
+     ========================================================= */
+  const map = L.map('map', {
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  // Tiles escuros (CartoDB Dark Matter) — combinam com o tema
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Linha da rota (polyline tracejada/animada)
+  const latlngs = pontos.map(p => [p.lat, p.lng]);
+
+  const rotaLine = L.polyline(latlngs, {
+    color: '#38bdf8',
+    weight: 4,
+    opacity: 0.9,
+    lineJoin: 'round',
+    dashArray: '1, 10',
+    lineCap: 'round'
+  }).addTo(map);
+
+  // "Halo" por baixo da linha para dar brilho
+  L.polyline(latlngs, {
+    color: '#22d3ee',
+    weight: 12,
+    opacity: 0.12,
+    lineJoin: 'round'
+  }).addTo(map);
+
+  // Marcadores numerados
+  const markers = [];
+
+  pontos.forEach((p, i) => {
+    const isStart = i === 0;
+    const isEnd = i === TOTAL - 1;
+
+    const cls = isStart ? 'start' : isEnd ? 'end' : '';
+
+    const cor = isStart
+      ? 'linear-gradient(135deg,#34d399,#10b981)'
+      : isEnd
+        ? 'linear-gradient(135deg,#f472b6,#fb7185)'
+        : 'linear-gradient(135deg,#38bdf8,#22d3ee)';
+
+    const corTexto = isStart ? '#03291c' : isEnd ? '#2a0413' : '#06202e';
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="num-marker" style="background:${cor};color:${corTexto}"><span>${i + 1}</span></div>`,
+      iconSize: [34, 34],
+      iconAnchor: [17, 34],
+      popupAnchor: [0, -34]
+    });
+
+    const label = isStart ? 'Início' : isEnd ? 'Fim' : `Ponto ${i + 1}`;
+
+    const marker = L.marker([p.lat, p.lng], { icon })
+      .addTo(map)
+      .bindPopup(
+        `<b>${label}</b><br>
+         Lat: <code>${p.lat.toFixed(6)}</code><br>
+         Lng: <code>${p.lng.toFixed(6)}</code>`
+      );
+
+    marker.on('click', () => highlightItem(i));
+    markers.push(marker);
+  });
+
+  // Ajusta o zoom para enquadrar a rota
+  function fitRoute(){
+    map.fitBounds(rotaLine.getBounds(), { padding: [40, 40] });
+  }
+  fitRoute();
+
+  /* =========================================================
+     LISTA LATERAL
+     ========================================================= */
+  const listEl = document.getElementById('list');
+
+  pontos.forEach((p, i) => {
+    const isStart = i === 0;
+    const isEnd = i === TOTAL - 1;
+
+    const item = document.createElement('div');
+    item.className = 'item ' + (isStart ? 'start' : isEnd ? 'end' : '');
+    item.dataset.index = i;
+    item.id = 'item-' + i;
+
+    const nome = isStart ? 'Ponto de partida' : isEnd ? 'Destino final' : `Parada ${i + 1}`;
+
+    item.innerHTML = `
+      <div class="pin">${i + 1}</div>
+      <div class="info">
+        <span class="name">${nome}</span>
+        <span class="coords">${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</span>
+      </div>
+    `;
+
+    item.addEventListener('click', () => {
+      map.setView([p.lat, p.lng], 16, { animate: true });
+      markers[i].openPopup();
+    });
+
+    listEl.appendChild(item);
+  });
+
+  function highlightItem(i){
+    document.querySelectorAll('.item').forEach(el => {
+      el.style.background = '';
+    });
+    const el = document.getElementById('item-' + i);
+    if (el){
+      el.style.background = 'rgba(56,189,248,.16)';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  /* =========================================================
+     LINK PARA O GOOGLE MAPS
+     O Google Maps aceita no máximo 9 paradas por link.
+     Aqui geramos um link com origem, destino e paradas.
+     ========================================================= */
+  function buildGoogleMapsLink(){
+    // Limite de 9 paradas intermediárias + origem + destino
+    const maxWaypoints = 9;
+    const origem = pontos[0];
+    const destino = pontos[pontos.length - 1];
+    const intermediarios = pontos.slice(1, -1);
+
+    // Se houver mais que 9 intermediários, pegamos os 9 primeiros
+    // (o link do Google não suporta mais que isso)
+    const waypoints = intermediarios.slice(0, maxWaypoints)
+      .map(p => `${p.lat},${p.lng}`)
+      .join('|');
+
+    const base = 'https://www.google.com/maps/dir/?api=1';
+    const params = new URLSearchParams({
+      origin: `${origem.lat},${origem.lng}`,
+      destination: `${destino.lat},${destino.lng}`,
+      travelmode: 'driving'
+    });
+
+    if (waypoints) params.append('waypoints', waypoints);
+
+    return base + '&' + params.toString();
+  }
+
+  const gmapsLink = document.getElementById('gmapsLink');
+  gmapsLink.href = buildGoogleMapsLink();
+
+  /* =========================================================
+     BOTÕES
+     ========================================================= */
+  document.getElementById('fitBtn').addEventListener('click', fitRoute);
+
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    const texto = pontos.map((p, i) =>
+      `${i + 1}. ${p.lat}, ${p.lng}`
+    ).join('\n');
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      const btn = document.getElementById('copyBtn');
+      const original = btn.textContent;
+      btn.textContent = '✅ Copiado!';
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    } catch (e) {
+      alert('Não foi possível copiar. Selecione manualmente:\n\n' + texto);
+    }
+  });
+
+  document.getElementById('countBadge').textContent = `${TOTAL} pontos`;
+</script>
+</body>
+</html>
